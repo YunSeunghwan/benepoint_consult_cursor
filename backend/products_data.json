@@ -1,0 +1,93 @@
+{
+  "products": [
+    {
+      "id": "p1",
+      "name": "스타벅스 아메리카노",
+      "category": "food",
+      "price": 4500,
+      "rating": 4.8
+    },
+    {
+      "id": "p2",
+      "name": "헬스장 1개월 이용권",
+      "category": "health",
+      "price": 50000,
+      "rating": 4.5
+    },
+    {
+      "id": "p3",
+      "name": "온라인 쇼핑몰 5천원 할인",
+      "category": "shopping",
+      "price": 5000,
+      "rating": 4.2
+    },
+    {
+      "id": "p4",
+      "name": "넷플릭스 1개월 구독권",
+      "category": "life",
+      "price": 17000,
+      "rating": 4.7
+    },
+    {
+      "id": "p5",
+      "name": "온라인 강의 수강권",
+      "category": "education",
+      "price": 25000,
+      "rating": 4.3
+    },
+    {
+      "id": "p6",
+      "name": "생활용품 할인권",
+      "category": "life",
+      "price": 15000,
+      "rating": 4.1
+    },
+    {
+      "id": "p7",
+      "name": "점심식사 지원권",
+      "category": "food",
+      "price": 10000,
+      "rating": 4.5
+    },
+    {
+      "id": "p8",
+      "name": "배달의민족 2만원권",
+      "category": "food",
+      "price": 20000,
+      "rating": 4.6
+    },
+    {
+      "id": "p9",
+      "name": "김치냉장고 할인쿠폰",
+      "category": "life",
+      "price": 50000,
+      "rating": 4.4
+    },
+    {
+      "id": "p10",
+      "name": "요가매트 세트",
+      "category": "health",
+      "price": 35000,
+      "rating": 4.3
+    },
+    {
+      "id": "p11",
+      "name": "홈트레이닝 온라인 강의",
+      "category": "health",
+      "price": 29000,
+      "rating": 4.6
+    }
+  ],
+  "users": [
+    {
+      "id": "demo-user",
+      "name": "테스트 사용자",
+      "preferences": {
+        "categories": [
+          "food",
+          "health"
+        ]
+      }
+    }
+  ]
+}

@@ -1,8 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
+import time
 from dotenv import load_dotenv
+from simple_db import simple_db
+from logger_config import log_api_request, log_chat_interaction, log_error, log_system_event
+from log_viewer import get_log_files, read_log_file, search_logs, get_log_stats, parse_chat_logs
 
 # 환경변수 로드
 load_dotenv()
@@ -17,11 +21,40 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://know-antiques-florists-elephant.trycloudflare.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# API 요청 로깅 미들웨어
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # 요청 정보 로깅
+    log_api_request(
+        method=request.method,
+        path=str(request.url.path),
+        user_id=None,  # 나중에 사용자 인증 시 추가
+        data=None
+    )
+    
+    response = await call_next(request)
+    
+    # 응답 시간 계산
+    process_time = time.time() - start_time
+    log_system_event("API_RESPONSE", {
+        "path": str(request.url.path),
+        "status_code": response.status_code,
+        "process_time": f"{process_time:.4f}s"
+    })
+    
+    return response
 
 # 요청/응답 모델
 class ChatRequest(BaseModel):
@@ -42,41 +75,46 @@ async def root():
 async def health_check():
     return {"status": "healthy", "service": "benefit-station-ai"}
 
-# 샘플 상품 데이터
-SAMPLE_PRODUCTS = [
-    {"id": "p1", "name": "스타벅스 아메리카노", "category": "food", "price": 4500, "rating": 4.8},
-    {"id": "p2", "name": "헬스장 1개월 이용권", "category": "health", "price": 50000, "rating": 4.5},
-    {"id": "p3", "name": "온라인 쇼핑몰 5천원 할인", "category": "shopping", "price": 5000, "rating": 4.2},
-    {"id": "p4", "name": "넷플릭스 1개월 구독권", "category": "life", "price": 17000, "rating": 4.7},
-    {"id": "p5", "name": "온라인 강의 수강권", "category": "education", "price": 25000, "rating": 4.3},
-    {"id": "p6", "name": "생활용품 할인권", "category": "life", "price": 15000, "rating": 4.1},
-    {"id": "p7", "name": "점심식사 지원권", "category": "food", "price": 10000, "rating": 4.5},
-    {"id": "p8", "name": "배달의민족 2만원권", "category": "food", "price": 20000, "rating": 4.6},
-]
+
 
 def get_products_by_keyword(keyword: str):
-    """키워드로 상품 필터링"""
+    """키워드로 상품 필터링 - JSON 기반 DB 사용"""
     keyword = keyword.lower()
     results = []
     
-    if any(word in keyword for word in ['식사', '먹', '음식', '커피', '스타벅스', '배달']):
-        results.extend([p for p in SAMPLE_PRODUCTS if p['category'] == 'food'])
+    # 카테고리별 키워드 매핑
+    category_keywords = {
+        'food': ['식사', '먹', '음식', '커피', '스타벅스', '배달'],
+        'health': ['건강', '헬스', '운동', '검진', '요가'],
+        'life': ['생활', '넷플릭스', '할인', '김치냉장고'],
+        'education': ['교육', '강의', '학습'],
+        'shopping': ['쇼핑', '구매']
+    }
     
-    if any(word in keyword for word in ['건강', '헬스', '운동', '검진']):
-        results.extend([p for p in SAMPLE_PRODUCTS if p['category'] == 'health'])
+    # 키워드에 해당하는 카테고리 찾기
+    target_categories = []
+    for category, keywords_list in category_keywords.items():
+        if any(word in keyword for word in keywords_list):
+            target_categories.append(category)
     
-    if any(word in keyword for word in ['생활', '넷플릭스', '할인']):
-        results.extend([p for p in SAMPLE_PRODUCTS if p['category'] == 'life'])
+    # 카테고리별로 상품 검색
+    for category in target_categories:
+        category_products = simple_db.get_products(category=category)
+        results.extend(category_products)
     
-    if any(word in keyword for word in ['교육', '강의', '학습']):
-        results.extend([p for p in SAMPLE_PRODUCTS if p['category'] == 'education'])
-    
-    if any(word in keyword for word in ['쇼핑', '구매']):
-        results.extend([p for p in SAMPLE_PRODUCTS if p['category'] == 'shopping'])
+    # 키워드로 직접 검색도 추가
+    search_results = simple_db.search_products(keyword)
+    results.extend(search_results)
     
     # 가격 필터링
+    max_price = None
     if '만원' in keyword or '저렴' in keyword:
-        results = [p for p in results if p['price'] <= 30000]
+        max_price = 30000
+    elif '천원' in keyword:
+        max_price = 10000
+    
+    if max_price:
+        results = [p for p in results if p.get('price', 0) <= max_price]
     
     # 중복 제거
     seen = set()
@@ -97,6 +135,9 @@ async def chat(request: ChatRequest):
     """
     try:
         message = request.message.lower()
+        
+        # 요청 로깅
+        log_api_request("POST", "/api/chat", request.user_id, {"message": request.message})
         
         # 키워드 기반 상품 추천
         recommended_products = get_products_by_keyword(message)
@@ -123,7 +164,15 @@ async def chat(request: ChatRequest):
             response_text = f"'{request.message}'에 대한 상품을 찾지 못했어요. 😅\n\n"
             response_text += "다음과 같은 키워드로 다시 시도해보세요:\n"
             response_text += "• 식사, 커피, 음식 관련\n• 건강, 운동, 헬스 관련\n• 생활, 넷플릭스, 할인 관련\n• 교육, 강의 관련"
-            recommended_products = SAMPLE_PRODUCTS[:3]  # 기본 추천
+            recommended_products = simple_db.get_products()[:3]  # 기본 추천
+        
+        # 채팅 상호작용 로깅
+        log_chat_interaction(
+            user_id=request.user_id,
+            message=request.message,
+            response=response_text,
+            products_count=len(recommended_products)
+        )
         
         return ChatResponse(
             response=response_text,
@@ -131,14 +180,91 @@ async def chat(request: ChatRequest):
         )
         
     except Exception as e:
-        print(f"채팅 처리 중 오류: {e}")
+        # 오류 로깅
+        log_error("CHAT_API_ERROR", str(e), {
+            "user_id": request.user_id,
+            "message": request.message
+        })
         raise HTTPException(status_code=500, detail=f"채팅 처리 중 오류가 발생했습니다: {str(e)}")
 
 # 상품 목록 조회
 @app.get("/api/products")
 async def get_products():
     """전체 상품 목록 조회"""
-    return {"products": SAMPLE_PRODUCTS}
+    products = simple_db.get_products()
+    return {"products": products}
+
+# 새 상품 추가 엔드포인트
+@app.post("/api/products")
+async def add_product(product: dict):
+    """새 상품 추가"""
+    try:
+        simple_db.add_product(product)
+        
+        # 상품 추가 로깅
+        log_system_event("PRODUCT_ADDED", {
+            "product_id": product.get("id"),
+            "product_name": product.get("name"),
+            "category": product.get("category"),
+            "price": product.get("price")
+        })
+        
+        return {"message": "상품이 성공적으로 추가되었습니다", "product": product}
+    except Exception as e:
+        log_error("PRODUCT_ADD_ERROR", str(e), {"product": product})
+        raise HTTPException(status_code=500, detail=f"상품 추가 중 오류: {str(e)}")
+
+# 로그 관리 API들
+@app.get("/api/logs")
+async def get_logs():
+    """사용 가능한 로그 파일 목록"""
+    files = get_log_files()
+    return {"log_files": files}
+
+@app.get("/api/logs/{filename}")
+async def get_log_content(filename: str, lines: int = 100):
+    """특정 로그 파일 내용 조회"""
+    if not filename.endswith('.log'):
+        filename += '.log'
+    
+    content = read_log_file(filename, lines)
+    stats = get_log_stats(filename)
+    
+    return {
+        "filename": filename,
+        "lines": content,
+        "stats": stats
+    }
+
+@app.get("/api/logs/{filename}/search")
+async def search_log(filename: str, keyword: str, lines: int = 50):
+    """로그에서 키워드 검색"""
+    if not filename.endswith('.log'):
+        filename += '.log'
+    
+    results = search_logs(filename, keyword, lines)
+    return {
+        "filename": filename,
+        "keyword": keyword,
+        "results": results,
+        "count": len(results)
+    }
+
+@app.get("/api/logs/chat/interactions")
+async def get_chat_interactions():
+    """채팅 상호작용 로그 (구조화된 데이터)"""
+    interactions = parse_chat_logs()
+    return {
+        "interactions": interactions,
+        "count": len(interactions)
+    }
+
+# 서버 시작 시 로깅
+log_system_event("SERVER_STARTUP", {
+    "app_name": "Benefit Station AI",
+    "version": "1.0.0",
+    "environment": "development"
+})
 
 if __name__ == "__main__":
     import uvicorn

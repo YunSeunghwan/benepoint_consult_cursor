@@ -8,6 +8,14 @@ const nextConfig = {
     NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
   },
   
+  // Cloudflare Tunnel 지원
+  experimental: {
+    allowedDevOrigins: [
+      'know-antiques-florists-elephant.trycloudflare.com',
+      '*.trycloudflare.com'
+    ]
+  },
+  
   // API routes 설정
   async rewrites() {
     return [

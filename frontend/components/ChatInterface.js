@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://successful-here-prospective-reaction.trycloudflare.com'
 
 export default function ChatInterface({ onProductsUpdate, onLoadingChange }) {
   const [messages, setMessages] = useState([
@@ -77,6 +77,21 @@ export default function ChatInterface({ onProductsUpdate, onLoadingChange }) {
     ))
   }
 
+  // 클라이언트에서만 시간을 표시하는 컴포넌트
+  const ClientOnlyTime = ({ timestamp }) => {
+    const [mounted, setMounted] = useState(false)
+    
+    useEffect(() => {
+      setMounted(true)
+    }, [])
+    
+    if (!mounted) {
+      return <span>--:--:--</span>
+    }
+    
+    return <span>{timestamp.toLocaleTimeString()}</span>
+  }
+
   return (
     <div className="chat-interface">
       <div className="chat-header">
@@ -93,7 +108,7 @@ export default function ChatInterface({ onProductsUpdate, onLoadingChange }) {
               {formatMessage(message.content)}
             </div>
             <div className="message-time">
-              {message.timestamp.toLocaleTimeString()}
+              <ClientOnlyTime timestamp={message.timestamp} />
             </div>
           </div>
         ))}
