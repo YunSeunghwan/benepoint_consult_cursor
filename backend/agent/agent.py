@@ -21,16 +21,29 @@ class BenefitStationAgent:
     def _initialize_agent(self):
         """에이전트 초기화"""
         try:
-            if not self.openai_api_key:
-                print("❌ OPENAI_API_KEY가 설정되지 않았습니다")
-                return
+            # Gemini API 키 확인
+            gemini_key = os.getenv("GEMINI_API_KEY")
             
-            # OpenAI LLM 초기화
-            self.llm = ChatOpenAI(
-                model_name="gpt-4o",
-                temperature=0.7,
-                openai_api_key=self.openai_api_key
-            )
+            if gemini_key:
+                print("✅ Gemini API 키 발견, Gemini 모델 사용")
+                # Gemini 모델 사용 (향후 구현)
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                self.llm = ChatGoogleGenerativeAI(
+                    model="gemini-pro",
+                    temperature=0.7,
+                    google_api_key=gemini_key
+                )
+            elif self.openai_api_key:
+                print("✅ OpenAI API 키 사용")
+                # OpenAI LLM 초기화
+                self.llm = ChatOpenAI(
+                    model_name="gpt-4o",
+                    temperature=0.7,
+                    openai_api_key=self.openai_api_key
+                )
+            else:
+                print("❌ AI API 키가 설정되지 않았습니다 (OpenAI 또는 Gemini 필요)")
+                return
             
             # 도구 가져오기
             tools = get_tools()
